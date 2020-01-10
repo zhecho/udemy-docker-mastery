@@ -1,0 +1,180 @@
+
+*******************************************************************************
+*                                Docker Notes                                 *
+*******************************************************************************
+ Linux installation check official docker documantation
+  Install docker  and check with version
+    $ docker version
+    Client: Docker Engine - Community
+     Version:           19.03.5
+     API version:       1.40
+     Go version:        go1.12.12
+     Git commit:        633a0ea838
+     Built:             Wed Nov 13 07:29:52 2019
+     OS/Arch:           linux/amd64
+     Experimental:      false
+    
+    Server: Docker Engine - Community
+     Engine:
+      Version:          19.03.5
+      API version:      1.40 (minimum version 1.12)
+      Go version:       go1.12.12
+      Git commit:       633a0ea838
+      Built:            Wed Nov 13 07:28:22 2019
+      OS/Arch:          linux/amd64
+      Experimental:     false
+     containerd:
+      Version:          1.2.10
+      GitCommit:        b34a5c8af56e510852c35414db4c1f4fa6172339
+     runc:
+      Version:          1.0.0-rc8+dev
+      GitCommit:        3e425f80a8c931f88e6d94a8c831b9d5aa481657
+     docker-init:
+      Version:          0.18.0
+      GitCommit:        fec3683
+     zen0@42 ~/prj/udemy-docker-mastery (master
+
+  Install docker-machine & docker-compose and check versions with:
+    - docker-machine version
+        $ docker-machine version
+        docker-machine version 0.16.2, build bd45ab13
+         zen0@42 ~/prj/udemy-docker-mastery (master)
+    - docker-compose version
+        $ docker-compose version
+        docker-compose version 1.25.1, build a82fef07
+        docker-py version: 4.1.0
+        CPython version: 3.7.4
+        OpenSSL version: OpenSSL 1.1.0l  10 Sep 2019
+         zen0@42 ~/prj/udemy-docker-mastery (master)
+        $
+
+ - Run nginx container in foreground 
+    $ docker container run --publish 80:80 nginx
+ - Run nginx container in background
+    $ docker container run --publish 80:80 --detach nginx
+ - List of running containers 
+    $ docker container ls 
+ - Stop running docker with "stop" and first unique numbers of ID
+    $ docker container ls
+    $ docker stop 15b
+ - Specify container name with "--name"
+    $ docker container run --publish 80:80 --detach --name webhost nginx
+ - Show Logs on webhost container
+    $ docker container logs webhost
+ - List running processes on webhost container 
+    $ docker container top webhost
+ - List all available commands 
+    $ docker container --help
+ - Remove Non-running containers 
+    $ docker container rm <id1> <id2> ....
+ - Remove running containers  "-f" - force
+    $ docker container rm -f <id1> <id2> ....
+ - List available images
+    $ docker image ls
+
+
+ Assignment: Manage multiple Containers
+    -d - detach
+    -e - (--env) assign environment variables 
+    --help - check all help
+
+ Running MySQL with random root password and check logs
+    $ docker container run --publish 127.0.0.1:3306:3306 -d --name db -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql
+    $ docker container run --name webserver -p 127.0.0.1:8080:80 -d nginx
+
+
+ Container processes
+    $ docker container top db
+     
+ Container Metadata configuration - check how container is started 
+    $ docker container inspect db
+    
+ Container Stats - check container performance / stats
+    $ docker container stats
+
+
+*************************************
+*  Getting Shell inside Containers  *
+*************************************
+    -i - interactive
+    -t - tty
+    # start bash
+    $ docker container run -it --name proxy nginx bash
+
+    # start basic ubuntu dist 
+    $ docker container run -it --name ubuntu ubuntu
+
+
+    # running the same instance 
+    $ docker container start -ai ubuntu
+
+    # attach to db container
+    $ docker container exec -it db bash
+
+ Using Alpine image
+    $ docker pull alpine
+    $ docker container run -it alpine
+
+    # using apk package manager of alpine 
+
+    $ docker container inspect --format '{{ .NetworkSettings.IPAddress }}' lala
+
+*************************************
+*  Docker Network Concepts and CLI  *
+*************************************
+ bridge  - default nated network trough the host ip
+
+ CLI
+    $ docker network ls
+    $ docker network inspect
+    $ docker network create --driver
+    $ docker network connect
+    $ docker network disconnect
+
+ Show bridge configuration 
+    $ docker network inspect bridge
+
+ Create my_net
+    $ docker network create my_net
+    
+ Attach container to network 
+    $ docker container run --name nginx -d --network my_net nginx
+    # show network config
+    $ docker network inspect my_net
+    
+    # attach containers to network II way     
+    $ docker network connect my_net lala
+    $ docker network connect my_net nginx
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
