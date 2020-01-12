@@ -1,7 +1,8 @@
-# NOTE: this example is taken from the default Dockerfile for the official nginx Docker Hub Repo
-# https://hub.docker.com/_/nginx/
-# NOTE: This file is slightly different than the video, because nginx versions have been updated 
-#       to match the latest standards from docker hub... but it's doing the same thing as the video
+# NOTE: this example is taken from the default Dockerfile for the official
+# nginx Docker Hub Repo https://hub.docker.com/_/nginx/
+# NOTE: This file is slightly different than the video, because nginx versions
+# have been updated to match the latest standards from docker hub... but it's
+# doing the same thing as the video
 #       describes
 FROM debian:stretch-slim
 # all images must have a FROM
@@ -10,7 +11,8 @@ FROM debian:stretch-slim
 
 ENV NGINX_VERSION 1.13.6-1~stretch
 ENV NJS_VERSION   1.13.6.0.1.14-1~stretch
-# optional environment variable that's used in later lines and set as envvar when container is running
+# optional environment variable that's used in later lines and set as envvar
+# when container is running
 
 RUN apt-get update \
 	&& apt-get install --no-install-recommends --no-install-suggests -y gnupg1 \

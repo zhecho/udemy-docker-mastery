@@ -108,7 +108,7 @@
     # running the same instance 
     $ docker container start -ai ubuntu
 
-    # attach to db container
+    # run command on running container
     $ docker container exec -it db bash
 
  Using Alpine image
@@ -134,7 +134,7 @@
  Show bridge configuration 
     $ docker network inspect bridge
 
- Create my_net
+ Create network my_net
     $ docker network create my_net
     
  Attach container to network 
@@ -147,14 +147,111 @@
     $ docker network connect my_net nginx
 
 
+*********************************
+*  Assignment: CLI APP Testing  *
+*********************************
+
+  docker container run --name ubuntu -d -it ubuntu:14.04 bash
+    apt update && apt install curl
+  docker container run --name centos -d -it centos:7 bash 
+    yum install curl
+
+**************************************
+*  Assignment: DNS round robin Test  *
+**************************************
+  docker network create net1
+  docker container run -d --net net1 --network-alias lala elasticsearch:2
+  docker container run -d --net net1 --network-alias lala elasticsearch:2
+
+  docker container run --net net1 -it ubuntu 
+    apt update && apt install -y dnsutils iputils-ping curl 
+    dig lala
+    ping lala - check out ip 
+    ping lala - check out returing ip 
+    curl -s lala:9200 
+    curl -s lala:9200 
+
+ Attach/Detach to container process
+    docker container attach <cont_name>
+    Ctrl + p + Ctrl + q - detach from container without exit 
+    Ctrl + c / Ctrl + D - detach and exit
+
+*******************************************************************************
+*                              Container Images                               *
+*******************************************************************************
+
+Images are made up of file system changes and metadata
+Each Layer is identified and only stored Once in the host 
+COW - Copy on Write 
+
+hub.docker.org
+https://github.com/docker-library/official-images
+
+  docker pull nginx
+  docker pull nginx:1.11.9
+  docker pull nginx:1.11.9-alpine
+
+  docker image ls
+
+History of the Container layers
+  docker history ubuntu:latest
+  docker history nginx:latest
+
+Inspect -- show Metadata how this image will run 
+  docker image inspect nginx
+
+
+Login to hub.docker.com (after sign up and make token)
+  docker login --username
+  docker logout
+
+Images, tag, etc.
+  docker image tag --help
+  docker image tag nginx bredfisher/nginx - copy original to bredfisher/..
+  docker image tag bredfisher/nginx bredfisher/nginx:lala
+  docker image push bredfisher/nginx:lala - push to hub.docker.com
+
+*******************************************************************************
+*                               Building Images                               *
+*******************************************************************************
+
+  docker build -f some-docker-file
+
+Docker file:
+  FROM      - based on some of: debian:jessie | scratch | alpine:latest | ....
+  ENV       - to pass environment variables in the image
+  RUN       - build and execute some layers in the image like move all logs to
+/dev/stdout and /dev/sdterr and other
+  EXPOSE    - expose these ports on the docker virtual network
+  CMD       - required: run this command when container is launched; only one
+CMD allowed, so if there are multiple, last one wins
+  WORKDIR   - change working directory to root of nginx webhost using WORKDIR
+is preferred to using 'RUN cd /some/path'
+  COPY      - copy local files to image 
+
+Building from docker file:
+  docker image build -t custom_image .
+
+
+**************************************
+*  Assignment: Build Your Own Image  *
+**************************************
+
+Check out dockerfile-assignment-1/Dockerfile
+
+
+Cleaning
+- docker image prune     - to clean up just "dangling" images
+- docker system prune    - will clean up everything
+- docker image prune -a  - which will remove all images you're not using.
+- docker system df       - to see space usage.
 
 
 
 
-
-
-
-
+*******************************************************************************
+*                   Container Lifetime & Persistent Data 5                    *
+*******************************************************************************
 
 
 

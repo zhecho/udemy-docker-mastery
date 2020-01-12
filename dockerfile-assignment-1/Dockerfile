@@ -4,14 +4,15 @@
 # No modifications to the app should be necessary, only edit this Dockerfile
 
 # Overview of this assignment
-# use the instructions from developer below to create a working Dockerfile
-# feel free to add command inline below or use a new file, up to you (but must be named Dockerfile)
-# once Dockerfile builds correctly, start container locally to make sure it works on http://localhost
-# then ensure image is named properly for your Docker Hub account with a new repo name
-# push to Docker Hub, then go to https://hub.docker.com and verify
-# then remove local image from cache
-# then start a new container from your Hub image, and watch how it auto downloads and runs
-# test again that it works at http://localhost
+# use the instructions from developer below to create a working Dockerfile feel
+# free to add command inline below or use a new file, up to you (but must be
+# named Dockerfile)
+# once Dockerfile builds correctly, start container locally to make sure it
+# works on http://localhost then ensure image is named properly for your Docker
+# Hub account with a new repo name push to Docker Hub, then go to
+# https://hub.docker.com and verify then remove local image from cache then
+# start a new container from your Hub image, and watch how it auto downloads
+# and runs test again that it works at http://localhost
 
 
 # Instructions from the app developer
@@ -26,6 +27,24 @@
 # - then it needs to copy in all files from current directory
 # - then it needs to start container with command '/sbin/tini -- node ./bin/www'
 # - in the end you should be using FROM, RUN, WORKDIR, COPY, EXPOSE, and CMD commands
+
+FROM node:6-alpine
+
+RUN apk add --update tini \
+    && mkdir -p /usr/src/app \
+    && cd /usr/src/app/
+
+WORKDIR /usr/src/app/
+
+COPY package.json package.json
+
+RUN npm install && npm cache clean --force
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["/sbin/tini", "--", "node", "bin/www"]
 
 # Bonus Extra Credit
 # this will not have you setting up a complete image useful for local development, test, and prod
