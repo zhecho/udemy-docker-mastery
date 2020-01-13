@@ -247,12 +247,197 @@ Cleaning
 - docker system df       - to see space usage.
 
 
-
-
 *******************************************************************************
 *                   Container Lifetime & Persistent Data 5                    *
 *******************************************************************************
 
+
+******************************
+*  Persistent Data: Volumes  *
+******************************
+
+Docker file :
+ NOTE: Volumes is not auto-deleted when removing containers 
+ VOLUME - create a volume for persistent data
+
+
+Check mysql container 
+ docker pull mysql 
+ docker inspect mysql:latest
+ docker volume ls
+ # get some volume from the above cmd and inspect it 
+ docker inspect 1efe97851655ed81695d9744b135dd0da0841a3ae5ef826260627a057fdd79fc
+ # You can check "Mountpoint" if you use Linux  or mount it under OSX or Win in
+order to check it
+
+
+Named Volumes
+ "-v" - volumes / named volumes
+
+ docker container run -d --name=mysql -v mysql-db:/var/lib/mysql mysql 
+ docker volume ls 
+ # check volumes name 
+
+**********************************
+*  Persistent Data: Bind Mounts  *
+**********************************
+
+Mount file or directory to container
+
+Volumes can be defined in:
+- Docker file as "VOLUME"
+- as named volumes in "run" cmd: 
+  ... -v mysql-db:/var/lib/mysql 
+- Volumes are not auto-deleted when remove containers 
+ docker volumes ls / rm ...
+
+*******************************
+*  Assignment: Named Volumes  *
+*******************************
+ - Database upgrade with containers
+ - Create postrgresql with named volume psql-data using version 9.6.1
+ - Use Docker Hub to learn VOLUME path
+ - Check logs, stop container
+ - Create new container with postgresql with save named vol. version 9.6.2 
+ - Check logs and validate
+
+$ docker container run --name psql_1 -v psql-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=`head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20 ;\
+   echo ''` postgres:9.6.1
+
+$ docker container logs -f psql_1
+
+$ docker container run --name psql_2 -v psql-data:/var/lib/postgresql/data \
+  postgres:9.6.2
+
+$ docker container logs -f psql_2
+
+
+*****************************
+*  Assignment: Bind Mounts  *
+*****************************
+
+cd bindmount-sample-1
+docker container run --rm -p 80:4000 -v $(pwd):/site bretfisher/jekyll-serve
+
+
+*******************************************************************************
+*                          Section 6: Docker Compose                          *
+*******************************************************************************
+
+ - YAML formatted file describe the solution for:
+    containers
+    networks
+    volumes
+ - CLI tool docker-compose
+    docker-compose.yml          - default filename
+    docker-compose -f <file>    - load filename
+       
+ YAML File config items:
+    version: '3.1'  # if no version is specificed then v1 is assumed. Recommend v2 minimum
+    services:  # containers. same as docker run
+      servicename: # a friendly name. this is also DNS name inside network
+        image: # Optional if you use build:
+        command: # Optional, replace the default CMD specified by the image
+        environment: # Optional, same as -e in docker run
+        volumes: # Optional, same as -v in docker run
+      servicename2:
+    volumes: # Optional, same as docker volume create
+    networks: # Optional, same as docker network create
+
+*****************************
+*  Docker Compose CLI tool  *
+*****************************
+
+Docker compose is using docker API to talk with containers. It have similar
+commands
+
+cd compose-sample-2
+docker-compose up
+docker-compose up -d        - run in backgorund
+docker-compose ps           - list running containers
+docker-compose top          - show proc
+docker-compose down         - destroy everyting
+
+
+**************************************
+*  Assignment: Write a compose file  *
+**************************************
+
+# version: '3.1'
+version: '2'
+# Assignment: Writing a Compose File
+
+# > Goal: Create a compose config for a local Drupal CMS website
+# 
+# - This empty directory is where you should create a docker-compose.yml 
+# - Use the `drupal` image along with the `postgres` image
+# - Set the version to 2
+# - Use `ports` to expose Drupal on 8080
+# - Be sure to setup POSTGRES_PASSWORD on postgres image
+# - Walk though Drupal config in browser at http://localhost:8080
+# - Tip: Drupal assumes DB is localhost, but it will actually be on the compose
+# service name you give it
+# - Use Docker Hub documentation to figure out the right environment and volume
+# settings
+# - Extra Credit: Use volumes to store Drupal unique data
+
+services:
+  web:
+    image: drupal:8.2
+    volumes:
+      - drupal-modules:/var/www/html/modules 
+      - drupal-profiles:/var/www/html/profiles 
+      - drupal-sites:/var/www/html/sites 
+      - drupal-themes:/var/www/html/themes 
+    ports:
+      - '8080:80'
+  db:
+    image: postgres:9.6
+    environment:
+      # - POSTGRES_DB=db
+      # - POSTGRES_USER=usr
+      - POSTGRES_PASSWORD=pwd
+    volumes:
+      - psql_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    
+volumes:
+  psql_data:
+  drupal-modules:
+  drupal-profiles:
+  drupal-sites:
+  drupal-themes:
+
+
+****************************
+*  Using Compose to build  *
+****************************
+# Build image from nginx.Dockerfile
+version: '2'
+
+# based off compose-sample-2, only we build nginx.conf into image
+# uses sample site from https://startbootstrap.com/template-overviews/agency/
+
+services:
+  proxy:
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
+    ports:
+      - '80:80'
+  web:
+    image: httpd
+    volumes:
+      - ./html:/usr/local/apache2/htdocs/
+
+
+ docker-compose build 
+
+***************************************
+*  Assignment: Build and Run Compose  *
+***************************************
 
 
 
