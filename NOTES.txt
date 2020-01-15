@@ -438,15 +438,53 @@ services:
 ***************************************
 *  Assignment: Build and Run Compose  *
 ***************************************
+# docker-compose.yml
+version: '2'
+services:
+  web:
+    build:
+      context: .
+      dockerfile: drupal_8_6_custom.Dockerfile
+    image: custom-drupal
+    volumes:
+      - drupal-modules:/var/www/html/modules 
+      - drupal-profiles:/var/www/html/profiles 
+      - drupal-sites:/var/www/html/sites 
+      - drupal-themes:/var/www/html/themes 
+    ports:
+      - '8080:80'
+  db:
+    image: postgres:9.6
+    environment:
+      # - POSTGRES_DB=postgres
+      # - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
+    volumes:
+      - drupal-data:/var/lib/postgresql/data
+    # ports:
+      # - '5432:5432'
+    
+volumes:
+  drupal-data:
+  drupal-modules:
+  drupal-profiles:
+  drupal-sites:
+  drupal-themes:
 
+**********************************
+*  drupal_8_6_custom.Dockerfile  *
+**********************************
+FROM drupal:8.6
+RUN  apt-get update && apt-get install -y git \
+     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /var/www/html/themes
 
+RUN git clone --branch 8.x-3.x --single-branch --depth 1 \
+    https://git.drupal.org/project/bootstrap.git \
+    && chown -R www-data:www-data bootstrap
 
-
-
-
-
-
+WORKDIR /var/www/html
 
 
 
