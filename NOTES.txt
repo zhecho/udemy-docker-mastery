@@ -487,6 +487,127 @@ RUN git clone --branch 8.x-3.x --single-branch --depth 1 \
 WORKDIR /var/www/html
 
 
+*******************************************************************************
+*                                 Section 7:                                  *
+*******************************************************************************
+
+
+***************************************
+*  63. Creating 3-node swarm cluster  *
+***************************************
+- play-with-docker.com
+- docker-machine + VBox
+- on localhost
+    docker-machine create node1  - create node 1 
+    docker-machine create node2  - create node 2 
+    docker-machine create node3  - create node 3 
+    docker-machine env node1     - in order to set env variables
+    docker-machine ssh node1     - login via ssh to node 1
+
+    on node1:
+    # create swarm manager
+    docker swarm init --advertise-addr 192.168.99.100
+
+    # list nodes 
+    docker node ls 
+
+    # goto node2 and join him with ... 
+    docker swarm join --token SWMTKN-1-5tdfd5350x7pv04kt2hvzhtsy4nxwtavxij07o8eid5x6ag9c0-7rhd58nl0hxnhl4e4k741x16a 192.168.99.100:2377
+
+    Note: Workers is not allowed to list/modify cluster state !! (so docker
+node ls command will not work at node2)
+
+    # make node2 manager
+    # on node1 execute:
+    docker node update --role manager node2
+
+    # to join the manager to the swarm use
+    docker swarm join-token manager
+
+    # copy/paste output from above command in order to join the swarm node3
+    docker swarm join .....
+
+    # on some manager node execute
+    docker service create --replicas 3 alpine ping 8.8.8.8  
+    
+    # check out running processes 
+    docker node ps node1 
+    docker node ps node2
+    docker node ps node3
+    or 
+    docker service ps <name>
+
+- Digital ocean + docker install
+    create 3 droplets with 10$ price
+
+Use get.docker.com curl in order to run docker on VMs
+
+*******************************************************************************
+*             Section 8: Swarm basic futures and How to use Them              *
+*******************************************************************************
+
+
+********************************************************
+*  64. Scaling out with Overlay Multi-host Networking  *
+********************************************************
+
+Use "--driver overlay" - and it will create "vlan" for container-to-container
+traffic inside single swarm
+Optional we can use IPsec for that kind of netowrk
+
+
+ docker network create --driver overlay mydupal
+ # on some manager node
+ docker service create --name psql --network mydupal \ 
+    -e POSTGESQL_PASSWORD=yes postgres:11
+
+ # check it out 
+ docker service ls
+ docker service ps psql
+
+ # create and check drupal
+ docker service create --name drupal --network mydupal -p 80:80 drupal
+ docker service ps drupal 
+
+ # watch raising services with :)
+ watch docker service ls 
+
+
+***************************************
+*  65: Scaling out with Routing Mesh  *
+***************************************
+Uses: 
+    - IPVS from kernel
+    - load balance all services across their Tasks
+        - container-to-container overlay network uses virtual IP
+    - routes ingress traffic to proper task
+
+ # create elastic search in order to understand routing mesh
+ docker service create --name search --replicas=3 -p 9200:9200 elasticsearch:2
+
+ # check with curl the virtual IP with integrated load balancer 
+ for i in 3 i++; do curl localhost:9200; done
+
+# Important NOTES !!!
+ - Load Balancing method is STATELESS !
+ - LB is Layer 3 (TCP) based not Layer 4 (DNS)
+ 
+# Solution for above restrictions 
+ - use Nginx or HAproxy
+ - use DockerEE with build-in L4 web proxy
+
+***************************************************************
+*  66: Assignment: Create a multi-service multi-node web app  *
+***************************************************************
+  Use README for in swarm-app-1
+  Check out file swarm-app-1/swarm-app.sh
+ 
+
+
+ 
+
+
+
 
 
 
