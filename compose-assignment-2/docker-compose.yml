@@ -13,8 +13,9 @@
 #   do that so a new major version doesn't surprise you.
 # 
 # ## Dockerfile
-# - First you need to build a custom Dockerfile in this directory, `FROM
-#   drupal:8.6` NOTE: if it fails to build, try the lastest 8 branch version with
+# - First you need to build a custom Dockerfile in this directory,
+# `FROM drupal:8.6`
+#   NOTE: if it fails to build, try the lastest 8 branch version with
 # `FROM drupal:8`
 # - Then RUN apt package manager command to install git: `apt-get update &&
 #   apt-get install -y git`

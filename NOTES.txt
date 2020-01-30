@@ -603,16 +603,972 @@ Uses:
   Check out file swarm-app-1/swarm-app.sh
  
 
+***************************************************
+*  68. Swarm Stacks and production grade Compose  *
+***************************************************
+ Stacks accepts Compose files with services, networks, volumes
+ Use "docker stack deploy" instead of "docker service create"
+  - New "deploy:" keyword but:
+    - compose ignore "deploy:"
+    - swarm igonres "build:"
+
+ Stack file: example-voting-app-stack.yml
+
+ docker stack deploy -c example-votin-app-stack.yml voteapp
+ docker stack ls
+ docker stack ps voteapp
+ docker stack services voteapp
+ # NOTE: If you want update the stack, edit file and rerun above command
+ docker stack deploy -c example-votin-app-stack.yml voteapp
+
+**************************************************************
+*  69. Secrets Storage for Swarm: Protecting Your Env. Vars  *
+**************************************************************
+
+ >1.13.0 Swarm Raft DB is encrypted on disk, stored only on manager nodes.
+ Communication between worker-manager is TLS secured
+
+ Secrets are stored in swarm and then assigned to service. They look like files
+but are in-memory fs at /run/secrets/<secret-name> ....
+
+*****************************************
+*  70. Using Secrets in Swarm Services  *
+*****************************************
+
+ cd secrets-sample-1 && cat psql_user.txt
+ - Create secrets
+ docker secret create psql_user psql_user.txt
+ - Generate Random password
+ head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20 | docker secret create psql_pass - 
+ - chek secrets
+ docker secret ls
+ docker secret inspect psql_user 
+
+With usr/password File
+ -Manual create service with env vars
+ docker service create --name psql --secret psql_user --secret psql_pass \
+ -e POSTGRES_PASSWORD_FILE=/run/secrets/psql_pass \
+ -e POSTGRES_USER_FILE=/run/secrets/psql_user postgres:9.4
+
+ - check secrets files within the docker 
+ docker container psql -it exec bash 
+ cat /run/secrets/psql_pass
+ - check logs
+ docker logs psql.1....... 
+ docker service ps
+ - Remove the secret with but IT WILL REDEPLOY THE Container !!!
+ docker service update --secret-rm
+
+
+****************************************
+*  71. Using secrets with Swarm Stack  *
+****************************************
+
+Version of the swarm file must be > v3.1
+"secrets:" option available in the file 
+
+ docker service create --name search --replicas=3 -p 9200:9200 elasticsearch:2
+
+Use secret-sample-2/docker-compose.yml
+ docker stack deploy -c docker-compose.yml mydb
+
+***********************************************
+*  72. Assignment: Create Stack with Secrets  *
+***********************************************
+
+Check compose-assignment-2/ dir
+  - edit file 72.assignment.compose.yml
+  - upload it with from vim
+    !docker-machine scp 72.assignment.compose.yml % node1:~/.
+  - ssh to node1 generate passwords and run deploy
+    docker-machine ssh node1 
+    - generate random password
+    head /dev/urandom | tr -dc A-Za-z0-9\[\]\(\)\{\}_\$\-\@\+  | head -c 32 
+    | head -c 32 | docker secret create psql_pwd -
+    echo "psql_usr" | docker secret create psql_usr -
+    - deploy 
+    docker stack up -c 72.assignment.compose.yml drupal
+    watch docker stack ps drupal
+
+
+
+
+*******************************************************************************
+*                       Section 9. Swarm App Lifecycle                        *
+*******************************************************************************
+
+
+
+*************************************************
+*  74. Using secrets with local docker compose  *
+*************************************************
+ - Check out if we are using swarm with;
+    docker node ls - ERROR means we don't have it 
+ NOTE: Not secure / for local use only (just uses -v option)
+ within secrets-sample-2 dir 
+    docker-compose up -da
+ - check file
+    docker-compose exec psql cat /run/secrets/psql_user
+
+
+****************************
+*  75. Full App Lifecycle  *
+****************************
+
+WORKDIR swarm-stack-3/
+
+ themes
+ psql-fake-password.txt
+ .gitignore
+ Dockerfile
+ docker-compose.yml             <-- base file
+ docker-compose.test.yml        <-- tesging
+ docker-compose.prod.yml        <-- production
+ docker-compose.override.yml    <-- override
+
+ - run swarm
+    docker-swarm up -d
+ - inspect drupal 
+    docker inspect swarm-stack-3_drupal_1 | less 
+
+ - Testing: Order of the files take precedence (last one override) check that
+   there is no volumes in the example
+    docker-swarm -f docker-compose.yml -f docker-compose.test.yml up -d 
+
+ - Production: Generate final YAML file from both
+    docker-swarm -f docker-compose.yml -f docker-compose.prod.yml up -d config
+    or  
+    docker-swarm -f docker-compose.yml -f \
+         docker-compose.prod.yml up -d config > output.yml
+
+ NOTE: Always check output.yml !!!!
+
+ Local docker-compose up        - Development Environment
+ Remote docker-compose up       - CI Environment
+ Remote docker stack deploy     - Production
+
+*************************************************
+*  76. Service Update: change things in flight  *
+*************************************************
+ Swarm Update examples:
+
+    docker service update --image myapp:1.2.2 <servicename>
+    # adding env and remove port
+    docker service update --env-add NODE_ENV=production --publish-rm 8080
+    # change number of replicas of tow services
+    docker service update web=8 api=6
 
  
+*******************************************
+*  77. Docker Health check in Dockerfile  *
+*******************************************
+ Healthcheck 
+    docker container ls         - healthcheck status
+    docker container inspect    - shows last 5 checks
+    
+ NOTE: Docker does nothing about healthchecks status !!!
+ Services will replace tasks if they fail healthcheck
+
+ Example:
+    docker run \
+      --health-cmd="curl -f localhost:9200/_cluster/health || false" \
+      --health-interval=5s \
+      --health-retries=3 \
+      --health-timeout=2s \
+      --health-start-period=12s \
+      elasticsearch:2
+
+ DockerFile Healthcheck Example:
+    Basic option using default option
+       HEALTHCHECK curl -f http://localhost/ || false
+    Custom option with the command
+       HEALTHCHECK --timeout=2s --interval=3s --retries=3 \
+         CMD curl -f http://localhost/ || exit 1
+ Postgres Example:
+    From postgres
+    # specify user with -U to prevent errors in logs
+    HEALTHCHECK --timeout=3s --interval=5s \
+      CMD pg_isready -U posgres || exit 1
+    
+ HealthCheck in Stack/Compose Files 
+    version: '2'
+    services:
+      web:
+        image: nginx
+        healthcheck:
+            test:["CMD", "curl", "-f", "http://localhost/"]
+            interval: 1m30s
+            timeout: 10s 
+            retries: 3
+            start_period: 1m # AFTER version 3.4
 
 
 
+*******************************************************************************
+*      Section 10: Container Registries / Image Storage and Distribution      *
+*******************************************************************************
+
+***************************************
+*  80. Understanding docker registry  *
+***************************************
+
+ - a private image registry for your network
+ - part of docker/distribution github repo
+ - "private container registry" no web UI basic auth
+ - At it's core: 
+    - web API and storage system written in GO
+    - storage support local/S3/google/alibaba/azure/openstack
+
+*************************************
+*  81. Run private docker registry  *
+*************************************
+ - run local registry container with volume within current dir
+    docker container run -d -p 5000:5000 \
+        --name registry -v $(pwd)/registry-data:/var/lib/registry registry 
+ - check it
+    docker container ls
+ - pull some image from docker hub and push it locally
+    docker pull hello-world
+    docker tag hello-world 127.0.0.1:5000/hello-world
+    docker push 127.0.0.1:5000/hello-world
+    docker image ls 
+ - remove it 
+    docker image remove 127.0.0.1:5000/hello-world
+    docker image remove hello-world
+ - Check if we can pull it from local registry agggain !!!!
+    docker image pull 127.0.0.1:5000/hello-world
+
+********************************************************************
+*  82. Assignment: Running Secure docker registry with basic Auth  *
+********************************************************************
+
+ https://training.play-with-docker.com/linux-registry-part2/
+
+ - Generate certificates
+    mkdir -p certs 
+    openssl req -newkey rsa:4096 -nodes -sha256 -keyout certs/domain.key \
+        -x509 -days 365 -out certs/domain.crt
+ - To get the docker daemon to trust the certificate, copy the domain.crt file.
+    mkdir /etc/docker/certs.d
+    mkdir /etc/docker/certs.d/127.0.0.1:5000 
+    cp $(pwd)/certs/domain.crt /etc/docker/certs.d/127.0.0.1:5000/ca.crt
+ - restart dockerd proccess 
+    sudo service docker stop && service docker start
+    pkill dockerd
+    dockerd > /dev/null 2>&1 &a
+
+ - create credentials moby with password gordon in htpasswd file within auth
+    mkdir auth
+    docker run --entrypoint htpasswd registry:latest \
+        -Bbn moby gordon > auth/htpasswd
+ - run new registry
+    docker kill registry
+    docker rm registry
+    docker run -d -p 5000:5000 --name registry \
+      --restart unless-stopped \
+      -v $(pwd)/registry-data:/var/lib/registry \
+      -v $(pwd)/certs:/certs \
+      -v $(pwd)/auth:/auth \
+      -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt \
+      -e REGISTRY_HTTP_TLS_KEY=/certs/domain.key \
+      -e REGISTRY_AUTH=htpasswd \
+      -e "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm" \
+      -e "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd" \
+      registry
+
+ - Test without auth
+    docker pull 127.0.0.1:5000/hello-world
+ - Test with auth
+    docker login 127.0.0.1:5000
+    docker pull 127.0.0.1:5000/hello-world
+
+
+******************************************
+*  83. Using docker registry with swarm  *
+******************************************
+
+ Using local docker-machine - 3 nodes cluster 
+    - docker-machine ssh node1
+    - docker service create --name registry -p 5000:5000 registry
+    - docker pull hello-world
+    - docker tag hello-world 127.0.0.1:5000/hello-world 
+    # check catalog
+    - curl 127.0.0.1:5000/v2/_catalog
+    - docker push 127.0.0.1:5000/hello-world
+    # check catalog
+    - curl 127.0.0.1:5000/v2/_catalog
+ NOTE: Make sure that all nodes must be able to access images
+
+*************************************
+*  84. Third Party docker registry  *
+*************************************
+
+ http://quay.io/
+ https://about.gitlab.com/2016/05/23/gitlab-container-registry/
+ https://github.com/veggiemonk/awesome-docker#hosting-images-registries
 
 
 
+*******************************************************************************
+*             Section 11: Docker in Production - Best Practices              *
+*******************************************************************************
+
+ - make it start
+ - make it log all things to stdout/stderr
+ - make it documentation in file
+ - make it work for other
+ - make it lean 
+ - make it scale
+
+ Problem: Storing unique data in container (postgresql/msyql ...)
+ Solution: Use Volume for each location
+
+ - Don't use "latest" images 
+ - Set ENV (environment variables) in the top of the file 
+ - Set specific versions for most of the packages installed by apt/apk/..
+   package managers
+
+ Problem: Leaving default configuration files php.ini/mysql.conf/ java memory
+ Solution: Update default configuration via RUN, ENV & ENTRYPOINT
+
+ Problem: Copy environment config at image build
+ Solution: Single Dockerfile with default ENV's and overwrite per environment
+           with ENTRYPOINT
+
+******************************************
+*  OS Linux Distribution/Kernel Matters  *
+******************************************
+ docker is very kernel and storage driver distribution
+ try ubuntu LTS
+ try InfraKit and LinuxKit 
 
 
+
+******************************
+*  89. What is Kubernetes ?  *
+******************************
+ Container orchestration make many servers act like one. Runs on top of docker
+usually as set of APIs in containers
+ Many cloud vendors make a "distribution" of it
+
+*************************
+*  90. Why Kubernetes?  *
+*************************
+ Servers + Change Rate = Benefit of orchestration
+ Which distribution of kubernetes ? 
+    - cloud or self-managed ( Docker Enterprise, Rnacher, OpenShift, Canonical,
+VMware PKS)
+
+
+********************************
+*  91. Kubernetes or Swarm ?   *
+********************************
+Review "Swarm Mode: Build-in Orchestration"
+
+ - swarm is easy  to deploy/manage but doesn't all problems
+ - kubernetes - more futures and flexiability
+Note: You should know both !!
+
+swarm   
+    - easy to deploy   comes with docker (sigle vendor container platform)
+    - follows 80/20 rule 20& futures, 80% of use cases.
+    - runs anywere Docker does; (local, cloud, datacenter...)
+    - security by default
+    - easier to troubleshoot
+
+kurbernetes
+    - cloud vendors will deploy/manage Kubernetes for you
+    - Infrastructure vendors are making own distribution
+    - widest adoption 
+    - flexible: covers wildest set of use cases
+    - "Kubernetes first" vendor support 
+
+*******************************************************************************
+*              Section 13: Kubernetes Install at your fist pods               *
+*******************************************************************************
+
+
+Basic Terms:
+    - K8s = K + 8 symbols + s :) = Kubernetes
+    - kubectl           - cli to configure K8s = "cube control" 
+    - Node              - single server on Kubernetes cluster
+    - Kubelet           - Kubernetes Agent running on nodes
+    - Control Plane     - set of containers that manage cluster
+        - includes API server, scheduler, controller manager , etcd , ...
+        - sometimes called "master"
+
+*****************************
+*  94: K8s on local system  *
+*****************************
+ Linux host:
+    - install MicroK8s  via snap
+        - sudo apt install snapd
+        - sudo snap install microk8s --classic
+        # make alias 
+        - echo "alias kubectl="microk8s.kubectl" >> ~/.profile
+        
+        
+ Within Browser
+    - katacoda.com or play-with-k8s.com
+
+
+
+***********************************
+*  95. K8s container abstracions  *
+***********************************
+
+ Pod - one or many containers running together on the node. containers are
+always on pods
+ Controller - for creating/updating pods and other objects
+    - controller types: deployment, replica set, stateful set, daemon set, job,
+      CronJob, etc...
+ Service - specific network endpoint to connect to a pod
+ Namespace - filtered group of objects in the cluster 
+ Secretes, Maps....
+
+
+*******************************
+*  96. K8s run, create apply  *
+*******************************
+
+ kubectl run        - create pod
+ kubectl create     - create some resources via cli or yaml
+ kubectl apply      - create/update anything via YAML
+
+**************************
+*  97. Our fist K8s pod  *
+**************************
+
+Two ways to deploy via cli or YAML
+
+CLI:
+    kubectl run my-nginx-name --image nginx
+    kubectl get pods
+    kubectl get all
+    # cleaning up
+    kubectl delete deployment my-nginx-name 
+
+***************
+*  98. Scale  *
+***************
+    kubectl run apache --image httpd
+    kubectl scale deploy/apache --replicas 2
+    or 
+    kubectl scale deploy apache --replicas 2
+    or 
+    kubectl scale deployments apache --replicas 2
+
+*************************
+*  99. Inspecting K8s  *
+*************************
+    kubectl get pods
+    kubectl logs deployment/apache
+    or 
+    kubectl logs deployment/apache --follow --tail 1
+   
+    # filter out by name -l = label  for troubleshooting
+    kubectl logs -l run=apache 
+
+    # describe
+    kubectl get pods
+    kubectl describe pod/<pod-name> 
+
+    # Check self-healing of the k8s
+    # deleting pod as we watch it with -w ; on window 1 do 
+    kubectl get pods -w 
+    # on second terminal do 
+    kubectl delete pod/<name-of-the-specific-pod>
+    
+*******************************************************************************
+*                           14. Exposing K8s Ports                            *
+*******************************************************************************
+
+
+ kubectl expose         - create a service for existing pod
+ 
+Type of services:   
+ - ClusterIP
+    - single internal VIP virtual IP
+    - only reachable within the cluster (nodes and pods)
+    - pods can reach service on app port
+ - NodePort
+    - port > 4096 allocated for each node
+    - port is open for any node's IP
+    - anyone can connect if they can reach node
+    - other pods need to be updated to this port
+ - LoadBalancer
+    - controls a LB endpoint external to the cluster 
+    - only available when infra provider gives you LB alternative like AWS ELB
+ - ExternalName
+    - adds CNAME record to CoreDNS only
+    - not used for pods but for pods DNS name for something outside of K8s
+
+**************************************
+*  102. Creating Cluster IP service  *
+**************************************
+ 
+ on separate window:
+    kubectl get pods -w
+ main window:
+    kubectl create deploy httpenv --image=bretfisher/httpenv
+    # scale 
+    kubectl scale deployments httpenv --replicas 5
+    # expose port 8888
+    kubectl expose deployments httpenv --port 8888
+
+    # Check out service 
+    kubectl get service
+
+    # on Linux
+    curl <cluster_ip>:8888
+
+    # on OSX or windows you need another vm (Host OS is not container OS) in
+    # order to check service on port 8888
+`   kubectl run --getnerator run-pod/v1 tmp-shell --rm -it --image bretfisher/\
+        netshoot -- bash 
+    # use name to send http GET method with curl  
+    curl httpenv:8888
+
+
+*********************************************
+*  103. Creating NodePort and LoadBalancer  *
+*********************************************
+ # Expose to external  
+    kubectl expose deploy/httpenv --port 8888 --name httpenv-np --type NodePort
+    kubectl get services
+ NOTE: NodePort is random get from range 30000-32767
+
+    # test localhost on linux
+    curl localhost:<exposed_port> | python -m json.tool
+
+ # LB
+    # Docker Desktop (windows / osx )
+    kubectl expose deploy/httpenv --port 8888 --name httpenv-lb \
+         --type LoadBalancer
+    # send couple of requests to ensure the LB is working  
+    curl localhost:8888 | python -m json.tool
+
+
+**********************************
+*  103. Kubernetes Services DNS  *
+**********************************
+
+CoreDNS is build in from version > 1.11  
+
+ kubectl get namespaces
+ # request FQDN
+ curl <hostname>.<namespace>.svc.cluster.local
+
+
+*******************************************************************************
+*                    Section 15: K8s Management Techniques                    *
+*******************************************************************************
+
+
+********************************************
+*  106. Run, Expose and Create Generators  *
+********************************************
+
+Generators are something like templates. Every resource in Kubernetes has
+specification or "specs"
+
+ # dry-run and spit out in yaml format
+ kubectl create deployment sample --image nginx --dry-run -o yaml
+ # job is something that needs to run once
+ kubectl create job test --image nginx --dry-run -o yaml
+
+ # expose needs running service so fist
+ kubectl create deployment nginx --image nginx
+ and after
+ kubectl expose deployment/nginx --port 80 --dry-run -o yaml
+
+
+**********************************
+*  107. Future of "kubectl run"  *
+**********************************
+To be only for pods not for deployment!
+
+Using dry-run we can see witch generators are used
+
+ kubectl run test --image nginx --port 80 --expose --dry-run
+ kubectl run test --image nginx --port 80 --restart OnFailure --dry-run
+ kubectl run test --image nginx --port 80 --restart Never --dry-run
+ kubectl run test --image nginx --port 80 --schedule "*/1 * * * *" --dry-run
+
+
+******************************************
+*  108. Imperative v/s Declarative way   *
+******************************************
+Imperative: 
+  step by step 
+
+Declarative:
+  kubectl apply -f my-resource.yaml
+
+
+********************************
+*  109. 3-ways to management   *
+********************************
+
+Imperative commands: scale,run,expose,edit,create deployment
+ - best for learning / personal projects
+ - hardest to manage over time
+Imperative objects: create -f file.yml, replace -f filename,yml, delete ..
+ - good for small environment
+ - store your files in git based yaml files
+ - hard to automate
+Declarative objects: apply -f file.yaml or dir\, diff
+ - best for production
+ - hard to unerstand and predict changes
+
+MOST IMPORTANT RULE: don't mix above approches 
+
+
+*******************************************************************************
+*                   Section 16: Moving to Declarative YAML                    *
+*******************************************************************************
+
+************************
+*  111. kubectl apply  *
+************************
+ kubectl apply -f filename.yaml
+ # or in the directory
+ kubectl apply -f dir/
+ # from URL
+ kubectl apply -f http://bret.ru/pod.yml
+
+
+********************************
+*  112. K8s cofiguration YAML  *
+********************************
+ K8s config file is YAML or JSON format. Each file contains one or more
+manifests. Each manifest is composed by 4 root parts:
+
+ k8s_config --> manifests --> 4 root (apiVersion: | kind: | metadata:| spec:)
+
+NOTE: "---\n" is delimiter between manifests. So you might have more manifests
+in one configuration file (./k8s-yaml/app.yml)
+
+******************************
+*  113. Building YAML files  *
+******************************
+ - kind:       
+    kubectl api-resources      - # List of API objects
+
+ - apiVersion: 
+    kubectl api-versions       -  list ot API versions
+ 
+ - metaData: 
+    oly name is required
+ - spec:
+    Where all the action is at!
+
+***********************************
+*  114. Building Your YAML Specs  *
+***********************************
+
+ # show all options for "kind: Service" 
+    kubectl explain services --recursive
+ # show sub keys of the spec "drill down" 
+    kubectl explain services.spec
+
+NOTE: You can always use documentation:
+      kubernetes.io/docs/reference/#api-reference
+
+****************************
+*  115. Dry-runs and Diff  *
+****************************
+ kubectl apply -y app.yml --dry-run
+ kubectl apply -y app.yml --server-dry-run
+# diff
+ kubectl diff -y app.yml
+
+*********************************
+*  116. Labels and Annotations  *
+*********************************
+ - under "metadata:"
+ - simple list key:value
+ - examples:
+    env: prod, app: api, tier: frontend, customer:acme.io
+
+ - filter and get command
+    kubectl get pods -l app=nginx
+ - apply only matching labels
+    kubectl apply -f app.yml -l app=nginx
+
+# Label Selectors
+ - The "glue" telling Services and Deployments which pods are theirs
+  (Check out app.yml under "selector:")
+ - Use Labels and Selectors to control which pods goes to wich nodes
+ - Taints and Tolerations also control node placement
+
+# Clear all 
+ kubectl get all
+ kubectl delete <resource type>/<resource name>
+
+
+
+*******************************************************************************
+*                     Section 17: Your next steps in K8s                      *
+*******************************************************************************
+
+
+*************************
+*  118. Storage in K8s  *
+*************************
+
+ - StatefullSets are new resource type that make Pods more sticky 
+Bret's recommendation :
+    Use db-as-a-service whenever you can. Keep it simple for you first
+deployments of DBs
+
+# Creating and connecting Volumes: 2 types
+
+ - Volumes
+    - tied to the lifecycle of the pod
+    - all containers in the single pod can share them
+
+ - PersistentVolumes
+    - created at the cluster level, outside the Pod
+    - separates storage configuration from Pod using it
+    - multiple pods can share them
+
+ - CSI (container storage interface)  plugins are the new way to connect to
+   storage
+
+*****************
+*  119. Ingress *
+*****************
+ - how to we route outside connections based on hostname or URL ?
+ - Ingress Controllers (optional) do this with 3rd party proxies
+    - nginx
+    - Traefik
+    - HA proxy
+    - F5
+    - Envoy
+    - Istio etc...
+
+****************************************
+*  120. CRDs and the operator pattern  *
+****************************************
+
+ - you can add 3rd party resources and controllers
+ - this extends k8s API and CLI
+ - a pattern is starting to emerge of using these together
+ - Operator: automate deployment and management of complex apps 
+    - DBs, monitoring tools, backups, and custom ingresses
+
+*****************************************
+*  121. Higher Deployment Abstractions  *
+*****************************************
+ - All of kubectl talk to K8s API
+ - K8s has limited build-in templates, versioning , tracking, and management of
+   your app
+ - There're over 60 ways to do that....
+    (https://docs.google.com/spreadsheets/d/1FCgqz1Ci7_VCz_wdh8vBitZ3giBtac_H8SBw4uxnrsE/edit#gid=0)
+    - "Helm" is most popular. Most distros support Helm
+    - "Compose on K8s" comes with Docker Desktop
+        (https://github.com/docker/compose-on-kubernetes/tree/master/docs)
+
+# Templating YAML
+    - "docker app" is Docker's way.
+
+************************
+*  122. K8s Dashboard  *
+************************
+ - default github.com/kubernetes/dashboard
+ - some distributions have their own gui (rancher, docker ent. , openshift)
+ - clouds don't have it by default 
+ - security first !!
+
+*********************************
+*  123. Namespaces and Context  *
+*********************************
+ - Namespaces limit scope, aga "virtual clusters"
+ - NOT RELATED to Docker/Linux namespaces
+ - won't need them is small cluster
+ - there's some build-in to hide system stuff from kubectl "users"
+    kubectl get namespaces
+
+ - Context changes kubectl cluster and namespace:
+    - cluster 
+    - authentication/user
+    - namespace 
+    - default config ~/.kube/config
+    
+    See default values from the configuration file with:
+        kubectl config get-contexts
+    Setting the default configuration wiht:
+        kubectl config set*
+
+
+
+*******************************************************************************
+*             Section 18: Docker Security Good Defaults and tools             *
+*******************************************************************************
+
+https://github.com/BretFisher/ama/issues/17
+
+****************************************
+*  126. Docker Cgroups and Namespaces  *
+****************************************
+Kernel namespaces
+    - it's about access and views like Jails on Solaris/FreeBSD
+    https://docs.docker.com/engine/security/security/
+Control groups (cgroups)
+    - it's about limiting your container
+
+********************************************
+*  127. Docker Engine's security features  *
+********************************************
+ Out of the box security features are enabled in docker itself in order to be
+more secure: AppArmor, SELinux, Seccomp, and Linux "capabilities" 
+    https://github.com/BretFisher/ama/issues/17
+
+***********************************************
+*  128. Docker Bench, the host configuration  *
+***********************************************
+Docker Bench:
+    https://github.com/BretFisher/dockercon19/blob/master/1.Dockerfile
+
+NOTE: Run your python/node/... app as non-root user!!!
+
+Example: (https://github.com/BretFisher/dockercon19/blob/master/1.Dockerfile)
+ check out in Docker file  how to create user and use it under "uSER:"
+
+ "USER: app_user"
+ 
+
+***************************************
+*  129. Enable Kernel User namespace  *
+***************************************
+
+It's not in the default configuration. you need to specify it in json config.
+It's per host option the idea of which is to lock down "runc" process to run
+container as privileged non-root user
+
+************************************************
+*  131. Code Repo and Image Scanning for CVEs  *
+************************************************
+
+Do "shift left" security: Make security at the early stage of your project
+  - Implement snyk as git commit hook 
+  scan images for CVEs
+    - trivy
+    - MicroScanner (aqua security)
+    - etc...
+
+
+****************************************************************************
+*  132. Sysdig Falco, Content Trust, Custom Seccomp and AppArmor profiles  *
+****************************************************************************
+
+ Running falco angent in the container in order to log security warnings and
+monitoring about that.
+    - free open source
+    - you can add more rules in the configuration file.
+
+*******************************************************************************
+*                    Section 19: Docker 19.03 new features                    *
+*******************************************************************************
+
+
+*****************************************
+*  138. BuildKit and docker buildx CLI  *
+*****************************************
+# check do you have buildx in your docker version
+    docker buildx ls 
+    docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t \
+        sujaypillai/releaseparty:multiarch . --push
+
+# create new builder
+    docker buildx create --driver docker-container --name dckbuilder
+    docker buildx ls 
+
+# use docker builder
+    docker ps
+    docker buildx use dckbuilder
+    docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t \
+        sujaypillai/releaseparty:multiarch . --push
+
+
+    docker buildx buildtools inspect sujaypillai/releaseparty:multiarch
+
+*********************************************
+*  139. Docker Context and SSH connections  *
+*********************************************
+    docker context ls
+# running command toward local machine
+    DOCKER_HOST="tcp://local_ip_address.:2376" docker ps
+ 
+# running commands trouugh play with docker 
+    - go to play with docker.com https://labs.play-with-docker.com
+    - run a container 
+    - copy ip from ssh  ip172-18-0-19-boo2ua033cq000f7vtu0.direct.labs.play-with-docker.com
+    - run command with on the remote container (chage "@" with ".") 
+    DOCKER_HOST="tcp://ip172-18-0-19-boo2ua033cq000f7vtu0.direct.labs.play-with-docker.com:2375" docker ps
+    - run nginx and check if it's working on docker_url:8080
+    DOCKER_HOST="tcp://<docker_url>:2375" docker run -d -p 8080:80 nginx
+
+# create own context using docker
+    docker context create --help
+    docker context create --docker "host=tcp://ip172-18-0-19-boo2ua033cq000f7vtu0.direct.labs.play-with-docker.com:2375" context_pwd
+
+# use context that just created
+    docker context use context_pwd
+    docker ls 
+# check logs 
+    docker container logs <container> 
+# refresh url  and watch logs 
+    watch docker container logs <container> 
+# delete container on that context
+    docker rm -f <container> 
+
+# Runnning commands on different contexts with "-c"
+    docker -c default ps        - will run ps command on default context
+
+# Running command on all contexts and containers :)
+    for c in `docker context ls -q`; do docker -c $c ps; done
+    for c in `docker context ls -q`; do docker -c $c run hello-world; done
+
+
+# Running Context connected with ssh 
+    - using .ssh/config (and hosts described there like "aws-labs-jump") to run
+      docker context
+    docker context create ssh --docker "host=ssh://aws-labs-jump" 
+    - switch to ssh context
+    docker context use ssh
+    - run some container
+    docker run hello-world
+
+    - with kubernetes
+    docker context create --kubernetes "config-file=somefile" --docker "from=default" test
+
+*********************************************************
+*  140. Docker app and image packaging of compose YAML  *
+*********************************************************
+Docker plugins are installed but not enabled bu default (~/.docker/cli-plugins)
+in order to enable it add the following json in the default config
+(~/.docker/config.json)
+{
+    Experimental: "enabled"
+}
+
+  docker app install --help
+  docker app install mikesir87/swarm-viz.dockerapp --target-context=context_pwd
+  docker app inspect mikesir87/swarm-viz.dockerapp --target-context=context_pwd
+# with -s you can replace parameter in the YAML file
+  docker app inspect -s results.exposedPort=8080 <app> --target-context=context_pwd
+
+
+# Docker Plugins How to extend your docker CLI 
+    - create plugin (like Docker-changelog bash script )
+    - installed it under ~/.docker/cli-plugins
+    - check with docker --help command 
+
+*******************************************************************************
+*                   Section 20: Q&A DevOps and Docker clips                   *
+*******************************************************************************
 
 
 
